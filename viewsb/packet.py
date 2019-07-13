@@ -697,6 +697,7 @@ class USBControlTransfer(USBTransfer):
     def from_subordinates(cls, setup_transfer, data_transfer, status_transfer):
         """ Generates a USB Control Transfer packet from its subordinate transfers. """
 
+
         fields = {}
 
         additional_fields = ('timestamp', 'endpoint_number', 'device_address', 'recipient')
@@ -720,6 +721,11 @@ class USBControlTransfer(USBTransfer):
             (status_transfer and status_transfer.pid == USBPacketID.STALL) or \
             (data_transfer and data_transfer.handshake == USBPacketID.STALL)
 
+        if fields['stalled']:
+            fields['handshake'] = USBPacketID.STALL
+        elif status_transfer:
+            fields['handshake'] = status_transfer.handshake
+
         # Set our subordinate packets to the three packets we're consuming.
         subordinates = [setup_transfer, data_transfer, status_transfer]
         fields['subordinate_packets'] = [s for s in subordinates if s is not None]
@@ -736,11 +742,15 @@ class USBControlTransfer(USBTransfer):
         # FIXME: validate our fields!
 
         # Set up our style.
-        # FIXME: display error statuses as well
         if self.stalled:
-            self.style = "exceptional"
+            self.style =  "exceptional"
+        elif self.handshake:
+            if self.handshake.is_handshake():
+                self.style = ""
+            else:
+                self.style =  "exceptional error invalid"
         else:
-            self.style = None
+                self.style =  "exceptional error"
 
 
     def summarize(self):
@@ -748,8 +758,12 @@ class USBControlTransfer(USBTransfer):
 
 
     def summarize_status(self):
-        # FIXME: display error statuses, as well
         if self.stalled:
             return "STALL"
+        elif self.handshake:
+            if self.handshake.is_handshake():
+                return self.handshake.name
+            else:
+                return "*INV*"
         else:
-            return "ACK"
+            return "TMOUT"
